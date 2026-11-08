@@ -38,9 +38,13 @@ wss.on("connection", function connection(ws) {
     ws.send("Welcome to my server");
   }
 
-  db.run(`INSERT INTO visitors (count, time)
-      VALUES(${numClients}, datetime('now'))
-  `);
+  // Better-Sqlite3 synchronous insert with parameterized query
+  db.prepare(
+    `
+    INSERT INTO visitors (count, time)
+    VALUES (?, datetime('now'))
+  `,
+  ).run(numClients);
 
   ws.on("close", function close() {
     wss.broadcast(`Current visitors: ${numClients} `);
@@ -58,21 +62,22 @@ wss.broadcast = function broadcast(data) {
 
 /** Begin Database  **/
 
-const sqlite = require("sqlite3");
-const db = new sqlite.Database(":memory:");
+const Database = require("better-sqlite3");
+const db = new Database(":memory:");
 
-// Serialize ensures the database is setup before we run any queries
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE visitors (
-      count INTEGER,
-      time TEXT
-    )
-    `);
-});
+// Because better-sqlite3 is synchronous, we don't need db.serialize()
+db.prepare(
+  `
+  CREATE TABLE visitors (
+    count INTEGER,
+    time TEXT
+  )
+`,
+).run();
 
 function getCounts() {
-  db.each("SELECT * FROM visitors", (err, row) => {
+  const rows = db.prepare("SELECT * FROM visitors").all();
+  rows.forEach((row) => {
     console.log(row);
   });
 }
